@@ -1,0 +1,9 @@
+{
+    "codeowners": ["@mathias-jakobsen"],
+    "config_flow": true,
+    "dependencies": [],
+    "domain": "matjak_lighting",
+    "name": "Matjak Lighting",
+    "requirements": [],
+    "version": "1.00"
+}

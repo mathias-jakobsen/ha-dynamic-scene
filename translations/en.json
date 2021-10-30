@@ -1,0 +1,46 @@
+{
+    "title": "Matjak Lighting",
+    "config": {
+        "abort": {
+            "already_configured": "Integration has already been configured."
+        },
+        "step": {
+            "user": {
+                "title": "Matjak Lighting",
+                "description": "Once you have added the integration, use the options button to configure it.",
+                "data": {}
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Matjak Lighting - Options",
+                "description": "From here you can configure which scenes to apply dynamic lighting to.",
+                "data": {
+                    "scenes_enabled": "Scenes enabled for dynamic lighting",
+                    "scene_selected": "Scene to configure (leave blank to save changes and exit)"
+                }
+            },
+            "scene": {
+                "title": "Matjak Lighting - Scene Configuration",
+                "description": "Enable and configure the dynamic lighting of a scene.",
+                "data": {
+                    "scene_active": "Scene being configured",
+                    "enabled": "Enable dynamic lighting",
+                    "transition": "Transition time (in seconds)",
+                    "transition_variance": "Variance of transition time (in seconds)",
+                    "duration": "Duration (in seconds) before lights transition to another color",
+                    "duration_variance": "Variance of duration time (in seconds)",
+                    "rotate_colors": "Rotate individual light colors between all lights",
+                    "color_temp_variance": "Variance of color temperature",
+                    "hue_variance": "Variance of hue part of hs_color",
+                    "saturation_variance": "Variance of saturation part of hs_color",
+                    "brightness_pct_variance": "Variance of brightness (in %)",
+                    "block_entities": "Block entities",
+                    "scene_selected": "Scene to configure (leave blank to save changes and exit)"
+                }
+            }
+        }
+    }
+}
