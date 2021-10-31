@@ -25,24 +25,18 @@ UNDO_LISTENERS = "undo_listeners"
 
 async def async_setup(hass: HomeAssistant, config: Dict[Any, str]) -> bool:
     if DOMAIN in config:
-        raise IntegrationError(
-            f"{DOMAIN} can only be loaded from the UI. Remove {DOMAIN} from your YAML configuration."
-        )
+        raise IntegrationError(f"{DOMAIN} can only be loaded from the UI. Remove {DOMAIN} from your YAML configuration.")
 
     return True
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     data = hass.data.setdefault(DOMAIN, {})
 
-    data[config_entry.entry_id] = {UNDO_LISTENERS: []}
-    data[config_entry.entry_id][UNDO_LISTENERS].append(
-        config_entry.add_update_listener(async_update_options)
-    )
+    data[config_entry.entry_id] = { UNDO_LISTENERS: [] }
+    data[config_entry.entry_id][UNDO_LISTENERS].append(config_entry.add_update_listener(async_update_options))
 
     for platform in PLATFORMS:
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(config_entry, platform)
-        )
+        hass.async_create_task(hass.config_entries.async_forward_entry_setup(config_entry, platform))
 
     return True
 
@@ -68,4 +62,5 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return unload_ok
 
 async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    pass
+    if len(hass.data[DOMAIN]) == 0:
+        hass.data.pop(DOMAIN)

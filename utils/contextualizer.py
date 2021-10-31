@@ -50,7 +50,7 @@ class Contextualizer:
         """ Calls a service. """
         context = self.create_context()
         parsed_service_data = self._parse_service_data(service_data)
-        self._hass.async_create_task(self._hass.services.async_call(domain, service, { **parsed_service_data }, context=context))
+        self._hass.async_create_task(self._hass.services.async_call(domain, service, parsed_service_data, context=context))
         return context
 
     def fire_event(self, event_type: str, **event_data: Any) -> Context:
