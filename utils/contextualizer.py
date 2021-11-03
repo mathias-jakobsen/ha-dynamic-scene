@@ -12,6 +12,7 @@ from typing import Any, Dict
 #       Constants
 #-----------------------------------------------------------#
 
+CONTEXT_PREFIX_LENGTH = 6
 CONTEXT_MAX_LENGTH = 36
 
 
