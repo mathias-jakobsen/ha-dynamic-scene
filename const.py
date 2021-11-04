@@ -33,8 +33,8 @@ import homeassistant.helpers.config_validation as cv
 #       Custom Component
 #-----------------------------------------------------------#
 
-DOMAIN = "matjak_lighting"
-DOMAIN_FRIENDLY_NAME = "Matjak Lighting"
+DOMAIN = "dynamic_scene"
+DOMAIN_FRIENDLY_NAME = "Dynamic Scene"
 PLATFORMS = ["sensor"]
 
 

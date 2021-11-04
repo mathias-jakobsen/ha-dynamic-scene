@@ -198,10 +198,11 @@ class ML_SensorEntity(SensorEntity):
         if scene_id in self._scenes:
             self._scenes[scene_id].stop()
 
-        self._scenes[scene_id] = DynamicScene(self, self.hass, scene_id, scene_config)
-        self._listeners(self._scenes[scene_id].add_update_listener(self._async_on_dynamic_scene_update))
-        self._listeners.append(async_call_later(self.hass, scene_delay, lambda: self._scenes[scene_id].start()))
+        self._scenes[scene_id] = DynamicScene(self.hass, scene_id, scene_config)
+        self._listeners.append(self._scenes[scene_id].add_update_listener(self._on_dynamic_scene_update))
+        self._listeners.append(async_call_later(self.hass, scene_delay, lambda *args: self._scenes[scene_id].start()))
+        self.async_schedule_update_ha_state(True)
 
-    async def _async_on_dynamic_scene_update(self) -> None:
+    def _on_dynamic_scene_update(self, dynamic_scene: DynamicScene) -> None:
         """ Called when a dynamic scene is updated (stopped or started) """
         self.async_schedule_update_ha_state(True)
