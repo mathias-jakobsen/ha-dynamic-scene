@@ -33,8 +33,8 @@ import homeassistant.helpers.config_validation as cv
 #       Custom Component
 #-----------------------------------------------------------#
 
-DOMAIN = "dynamic_scene"
-DOMAIN_FRIENDLY_NAME = "Dynamic Scene"
+DOMAIN = "matjak_lighting"
+DOMAIN_FRIENDLY_NAME = "Matjak Lighting"
 PLATFORMS = ["sensor"]
 
 
@@ -79,16 +79,13 @@ CONF_VARIANCE_TRANSITION = "transition_variance"
 #-----------------------------------------------------------#
 
 SERVICES = {
-    "dynamic_scene_pause": {
-        vol.Required(CONF_ID): str,
-        vol.Required(CONF_LIGHTS, default=[]): cv.entity_ids
-    },
-    "dynamic_scene_resume": {
+    "dynamic_scene_start": {
         vol.Required(CONF_ID): str,
         vol.Required(CONF_LIGHTS, default=[]): cv.entity_ids
     },
     "dynamic_scene_stop": {
-        vol.Required(CONF_ID): str
+        vol.Required(CONF_ID): str,
+        vol.Required(CONF_LIGHTS, default=[]): cv.entity_ids
     }
 }
 

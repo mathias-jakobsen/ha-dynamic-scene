@@ -1,22 +1,33 @@
-from homeassistant.components.sensor import SensorEntity
-from ..config_flow import CONF_DURATION, CONF_ROTATE_COLORS, CONF_VARIANCE_BRIGHTNESS_PCT, CONF_VARIANCE_COLOR_TEMP, CONF_VARIANCE_HUE, CONF_VARIANCE_SATURATION
-from ..const import ATTR_BLOCK_ENTITIES, ATTR_COLOR_TEMP, ATTR_COLOR_VALUE, CONF_VARIANCE_DURATION, CONF_VARIANCE_TRANSITION
+#-----------------------------------------------------------#
+#       Imports
+#-----------------------------------------------------------#
+
+from __future__ import annotations
+from . import track_manual_control
 from .contextualizer import Contextualizer
-from .events import track_manual_control
-from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_COLOR_MODE, ATTR_TRANSITION, DOMAIN as LIGHT_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_ON
-from homeassistant.core import Context, HomeAssistant
+from ..const import (
+    ATTR_BLOCK_ENTITIES,
+    ATTR_BRIGHTNESS,
+    ATTR_COLOR_MODE,
+    ATTR_COLOR_TEMP,
+    ATTR_COLOR_VALUE,
+    ATTR_ENTITY_ID,
+    ATTR_TRANSITION,
+    CONF_DURATION,
+    CONF_ROTATE_COLORS,
+    CONF_VARIANCE_BRIGHTNESS_PCT,
+    CONF_VARIANCE_COLOR_TEMP,
+    CONF_VARIANCE_DURATION,
+    CONF_VARIANCE_HUE,
+    CONF_VARIANCE_SATURATION,
+    CONF_VARIANCE_TRANSITION,
+    LIGHT_DOMAIN,
+    SERVICE_TURN_ON
+)
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
-from logging import getLogger
 from typing import Any, Callable, Dict, List
 import random
-
-
-#-----------------------------------------------------------#
-#       Constants
-#-----------------------------------------------------------#
-
-LOGGER = getLogger(__name__)
 
 
 #-----------------------------------------------------------#
@@ -133,7 +144,6 @@ class DynamicScenePart:
         self._listeners.append(async_call_later(self._hass, duration + transition, self._update))
 
 
-
 #-----------------------------------------------------------#
 #       DynamicScene
 #-----------------------------------------------------------#
@@ -143,19 +153,11 @@ class DynamicScene:
     #       Constructor
     #--------------------------------------------#
 
-    def __init__(self, entity: SensorEntity, hass: HomeAssistant, scene_id: str, scene_config: Dict[str, Any], start_delay: float = None):
+    def __init__(self, hass: HomeAssistant, scene_id: str, scene_config: Dict[str, Any]):
         self._contextualizer : Contextualizer              = Contextualizer(hass)
-        self._entity         : SensorEntity                = entity
         self._hass           : HomeAssistant               = hass
         self._listeners      : List[Callable]              = []
-        self._scene_config   : Dict[str, Any]              = scene_config
-        self._scene_parts    : Dict[str, DynamicScenePart] = {}
-        self._scene_id       : str                         = scene_id
-
-        if start_delay is None or start_delay == 0:
-            start_delay = 0.2
-
-        self._listeners.append(async_call_later(self._hass, start_delay, lambda *args: self.start()))
+        self._scene_parts    : Dict[str, DynamicScenePart] = self._setup_scene_parts(hass, scene_id, scene_config)
 
 
     #--------------------------------------------#
@@ -165,68 +167,69 @@ class DynamicScene:
     @property
     def is_running(self) -> bool:
         """ Gets a boolean indicating whether the dynamic scene is currently running. """
-        return len([part for part in self._scene_parts.values() if part.is_running])
+        return len([part for part in self._scene_parts.values() if part.is_running]) > 0
 
 
     #--------------------------------------------#
-    #       Methods
+    #       Methods -> Listeners
     #--------------------------------------------#
 
-    def pause(self, entity_ids: List[str] = []) -> None:
-        """ Pauses the dynamic scene (or parts of it) """
-        if len(entity_ids) == 0:
-            entity_ids = self._scene_parts.keys()
+    def add_update_listener(self, listener: Callable[[DynamicScene], None]) -> Callable:
+        """ Adds an update listener. """
+        def remove_listener() -> None:
+            self._listeners.remove(listener)
 
-        for entity_id in entity_ids:
-            self._scene_parts[entity_id].stop()
+        self._listeners.append(listener)
+        return remove_listener
 
-    def resume(self, entity_ids: List[str] = []) -> None:
-        """ Resumes the dynamic scene (or parts of it) """
-        if len(entity_ids) == 0:
+
+    #--------------------------------------------#
+    #       Methods -> Controls
+    #--------------------------------------------#
+
+    def start(self, entity_ids: List[str] = None) -> None:
+        """ Starts the dynamic scene. """
+        is_running = self.is_running
+
+        if entity_ids is None:
             entity_ids = self._scene_parts.keys()
 
         for entity_id in entity_ids:
             self._scene_parts[entity_id].start()
 
-    def start(self) -> None:
-        """ Starts the dynamic scene. """
-        scene_part_keys = self._scene_parts.keys()
+        if is_running != self.is_running:
+            self._fire_event()
 
-        if len(scene_part_keys) > 0:
-            return
-
-        self._setup_listeners()
-        self._setup_scene_parts()
-
-        for scene_part in self._scene_parts.values():
-            scene_part.start()
-
-    def stop(self) -> None:
+    def stop(self, entity_ids: List[str] = None) -> None:
         """ Stops the dynamic scene. """
-        for scene_part in self._scene_parts.values():
-            scene_part.stop()
+        is_running = self.is_running
 
-        while self._listeners:
-            self._listeners.pop()()
+        if entity_ids is None:
+            entity_ids = self._scene_parts.keys()
 
-        self._scene_parts = {}
+        for entity_id in entity_ids:
+            self._scene_parts[entity_id].stop()
+
+        if is_running != self.is_running:
+            self._fire_event()
 
 
     #--------------------------------------------#
     #       Private Methods
     #--------------------------------------------#
 
-    def _setup_listeners(self) -> None:
-        """ Sets up the event listeners. """
-        self._listeners.append(track_manual_control(self._hass, self._scene_config[ATTR_BLOCK_ENTITIES], self._async_on_manual_control, self._contextualizer.is_context_internal))
+    def _fire_event(self) -> None:
+        """ Fires an event. """
+        for listener in self._listeners:
+            listener(self)
 
-    def _setup_scene_parts(self) -> None:
+    def _setup_scene_parts(self, hass: HomeAssistant, scene_id: str, scene_config: Dict[str, Any]) -> Dict[str, DynamicScenePart]:
         """ Sets up the individual scene parts. """
-        lights = self._hass.states.get(self._scene_id).attributes.get(ATTR_ENTITY_ID, [])
+        lights = hass.states.get(scene_id).attributes.get(ATTR_ENTITY_ID, [])
         lights_config = {}
 
         for entity_id in lights:
-            state = self._hass.states.get(entity_id)
+            state = hass.states.get(entity_id)
 
             if state is None:
                 continue
@@ -244,7 +247,7 @@ class DynamicScene:
 
             lights_config.update({ entity_id: [{ ATTR_BRIGHTNESS: brightness, ATTR_COLOR_MODE: color_mode, ATTR_COLOR_VALUE: color_value }] })
 
-        if self._scene_config.get(CONF_ROTATE_COLORS):
+        if scene_config.get(CONF_ROTATE_COLORS):
             def transform_configs(configs: Dict[str, Any], entity_id: str) -> object:
                 result = [next((config for config_id, config in configs.items() if config_id == entity_id))]
 
@@ -256,16 +259,4 @@ class DynamicScene:
             color_configs = { entity_id: light_config[0] for entity_id, light_config in lights_config.items() }
             lights_config = { entity_id: transform_configs(color_configs, entity_id) for entity_id in lights_config.keys() }
 
-        self._scene_parts = { entity_id: DynamicScenePart(self._hass, self._contextualizer, entity_id, self._scene_config, lights_config[entity_id]) for entity_id in lights_config.keys() }
-
-
-    #--------------------------------------------#
-    #       Event Handlers
-    #--------------------------------------------#
-
-    async def _async_on_manual_control(self, entity_ids: List[str], context: Context) -> None:
-        for entity_id, scene_part in self._scene_parts.items():
-            if entity_id in entity_ids and scene_part.is_running:
-                self._entity.stop_scene(self._scene_id)
-                LOGGER.error("Manual control detected.")
-                return
+        return { entity_id: DynamicScenePart(self._hass, self._contextualizer, entity_id, scene_config, lights_config[entity_id]) for entity_id in lights_config.keys() }

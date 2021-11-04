@@ -2,14 +2,8 @@
 #       Imports
 #-----------------------------------------------------------#
 
-from config.custom_components.matjak_lighting.utils.contextualizer import Contextualizer
-from homeassistant.const import CONF_ENTITY_ID, CONF_LIGHTS
 from .const import (
     ATTR_ACTIVE_SCENES,
-    ATTR_BRIGHTNESS,
-    ATTR_COLOR_MODE,
-    ATTR_COLOR_TEMP,
-    ATTR_COLOR_VALUE,
     ATTR_DOMAIN,
     ATTR_ENTITY_ID,
     ATTR_PAUSED_SCENES,
@@ -17,6 +11,7 @@ from .const import (
     ATTR_SERVICE_DATA,
     ATTR_TRANSITION,
     CONF_ID,
+    CONF_LIGHTS,
     DOMAIN_FRIENDLY_NAME,
     EVENT_CALL_SERVICE,
     EVENT_HOMEASSISTANT_START,
@@ -28,7 +23,7 @@ from .utils.dynamic_scene import DynamicScene
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.helpers import config_validation as cv, entity_platform
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity_platform import EntityPlatform
 from homeassistant.helpers.event import async_call_later
 from logging import getLogger
@@ -40,6 +35,7 @@ from typing import Any, Callable, Dict, List
 #-----------------------------------------------------------#
 
 LOGGER = getLogger(__name__)
+MIN_DELAY_TIME = 2
 
 
 #-----------------------------------------------------------#
@@ -72,11 +68,10 @@ class ML_SensorEntity(SensorEntity):
     #--------------------------------------------#
 
     def __init__(self, config_entry: ConfigEntry):
-        self._config_entry   : ConfigEntry             = config_entry
-        self._contextualizer : Contextualizer          = None
-        self._listeners      : List[str]               = []
-        self._name           : str                     = f"{DOMAIN_FRIENDLY_NAME} - Dynamic Scenes"
-        self._scenes         : Dict[str, DynamicScene] = {}
+        self._config_entry : ConfigEntry             = config_entry
+        self._listeners    : List[str]               = []
+        self._name         : str                     = f"{DOMAIN_FRIENDLY_NAME}"
+        self._scenes       : Dict[str, DynamicScene] = {}
 
 
     #-----------------------------------------------------------------------------#
@@ -135,13 +130,12 @@ class ML_SensorEntity(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """ Triggered when the entity has been added to Home Assistant. """
         async def async_initialize(*args: Any) -> None:
-            self._contextualizer = Contextualizer(self.hass)
             self._listeners.append(self.hass.bus.async_listen(EVENT_CALL_SERVICE, self._async_on_scene_activated))
 
         if self.hass.is_running:
             return await async_initialize()
         else:
-            return self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, async_initialize)
+            return self._listeners.append(self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, async_initialize))
 
     async def async_will_remove_from_hass(self) -> None:
         """ Triggered when the entity is being removed from Home Assistant. """
@@ -160,37 +154,25 @@ class ML_SensorEntity(SensorEntity):
     #       Services
     #--------------------------------------------#
 
-    async def async_service_dynamic_scene_pause(self, **service_data: Any) -> None:
-        """ Handles a call to the 'matjak_lighting.dynamic_scene_pause' service. """
+    async def async_service_dynamic_scene_start(self, **service_data: Any) -> None:
+        """ Handles a call to the 'matjak_lighting.dynamic_scene_start' service. """
         scene_id = service_data.get(CONF_ID)
-        light_ids = service_data.get(CONF_LIGHTS)
+        entity_ids = service_data.get(CONF_LIGHTS, None)
 
         if scene_id not in self._scenes:
             return
 
-        self._scenes[scene_id].pause(light_ids)
-        self.async_schedule_update_ha_state(True)
-
-    async def async_service_dynamic_scene_resume(self, **service_data: Any) -> None:
-        """ Handles a call to the 'matjak_lighting.dynamic_scene_resume' service. """
-        scene_id = service_data.get(CONF_ID)
-        light_ids = service_data.get(CONF_LIGHTS)
-
-        if scene_id not in self._scenes:
-            return
-
-        self._scenes[scene_id].resume(light_ids)
-        self.async_schedule_update_ha_state(True)
+        self._scenes[scene_id].start(entity_ids=entity_ids if len(entity_ids) > 0 else None)
 
     async def async_service_dynamic_scene_stop(self, **service_data: Any) -> None:
         """ Handles a call to the 'matjak_lighting.dynamic_scene_stop' service. """
         scene_id = service_data.get(CONF_ID)
+        entity_ids = service_data.get(CONF_LIGHTS, None)
 
         if scene_id not in self._scenes:
             return
 
-        self._scenes.pop(scene_id).stop()
-        self.async_schedule_update_ha_state(True)
+        self._scenes.pop(scene_id).stop(entity_ids=entity_ids if len(entity_ids) > 0 else None)
 
 
     #--------------------------------------------#
@@ -208,7 +190,7 @@ class ML_SensorEntity(SensorEntity):
 
         scene_id = service_data.get(ATTR_ENTITY_ID, None)
         scene_config = self._config_entry.options.get(scene_id, None)
-        transition = max(service_data.get(ATTR_TRANSITION, 2), 2)
+        scene_delay = max(service_data.get(ATTR_TRANSITION, MIN_DELAY_TIME), MIN_DELAY_TIME)
 
         if scene_config is None:
             return
@@ -216,11 +198,10 @@ class ML_SensorEntity(SensorEntity):
         if scene_id in self._scenes:
             self._scenes[scene_id].stop()
 
-        self._scenes[scene_id] = DynamicScene(self, self.hass, scene_id, scene_config, transition)
+        self._scenes[scene_id] = DynamicScene(self, self.hass, scene_id, scene_config)
+        self._listeners(self._scenes[scene_id].add_update_listener(self._async_on_dynamic_scene_update))
+        self._listeners.append(async_call_later(self.hass, scene_delay, lambda: self._scenes[scene_id].start()))
+
+    async def _async_on_dynamic_scene_update(self) -> None:
+        """ Called when a dynamic scene is updated (stopped or started) """
         self.async_schedule_update_ha_state(True)
-
-
-    def stop_scene(self, id: str) -> None:
-        if id in self._scenes:
-            self._scenes.pop(id).stop()
-            self.async_schedule_update_ha_state(True)
